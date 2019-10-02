@@ -1,0 +1,275 @@
+rm(list = ls())
+library(mgcv);library(robCompositions); library(zCompositions);library(hydroGOF)
+setwd("C:/Users/Alejandro/Desktop/rf")
+filename<-"b2019_r0.csv";
+data<-read.csv(file=filename, header=TRUE, sep = ";", dec = ".");#d.r<-read.csv(file=filename2, header=TRUE, sep = ";", dec = ".");
+levels(data$country)
+
+###############################
+#1.0 Formando las composiciones
+###############################
+
+##1.1) Water-Sanitation
+ximp=data[,7]         #(Improved)
+x1=data[,8]             #(Piped);
+x2=ximp-x1              #(Other improved);
+xuni=100-ximp         #(Unimproved)
+x3=data[,9]             #(Surface);
+x4=xuni-x3              #(Other Unimproved)
+data=cbind(data,x1=x1);data=cbind(data,x2=x2);
+data=cbind(data,x3=x3);data=cbind(data,x4=x4);
+
+################################################################
+#2.0 TREATING ONLY ZERO VALUES 
+#Paraguay - Method Robust
+################################################################
+xp1=data[73:93,]; xp=data[73:93,10:13]   #Paraguay
+xp
+##2.1 Plot Patterns-Zero
+p.zer=zPatterns(xp,label=0,cell.labels=c("Zero (Paraguay)","Non-zero"),bar.labels=TRUE)
+
+##2.2 Treating zero values (Two alternatives)
+###Alternativa 1 (lrEM)/ZCompositions
+xi1=lrEM(xp, label=0, dl=rep(0.01, ncol(xp)), rob=TRUE,
+         ini.cov = c("complete.obs"), delta = 0.65,
+         tolerance = 0.0001, max.iter = 50, rlm.maxit = 150,
+         imp.missing = FALSE, suppress.print = FALSE, closure = NULL)
+
+###Alternativa 2 (impRZilr)/robCompositions
+xi2=impRZilr(xp, eps = 0.001, method = "MM", dl = rep(0.01, ncol(xp)), 
+             variation = FALSE, nComp = "boot", bruteforce = FALSE,
+             noisemethod = "residuals", noise = FALSE, R = 10,
+             correction = "normal", verbose = FALSE)
+xi2=xi2$x
+xi2t=xi2[,1]+xi2[,2]+xi2[,3]+xi2[,4]
+xi2=data.frame(xi2[,1]/xi2t,xi2[,2]/xi2t,xi2[,3]/xi2t,xi2[,4]/xi2t)
+
+###Ambas alternativas procesados
+xf=data.frame(xp1,xi1,xi2*100)
+xf
+#xp2=data[74:94,]
+#xp2=cbind(xp2,xf=xf)
+###Calculando métricas de calidad RMSE (Se activa package "hydroGOF")
+rmse_lrEM=rmse(xp2[,10],xp2[,14])+rmse(xp2[,11],xp2[,15])+rmse(xp2[,12],xp2[,16])+rmse(xp2[,13],xp2[,17])
+rmse_impRZilr=rmse(xp2[,10],xp2[,18])+rmse(xp2[,11],xp2[,19])+rmse(xp2[,12],xp2[,20])+rmse(xp2[,13],xp2[,21])
+rmse_lrEM*1000;
+rmse_impRZilr*1000
+
+#write.csv(xp2,file="C:/Users/Alejandro/Desktop/rf/Paraguay2019.csv",sep=",",dec = ".")
+
+################################################################
+#4.0 MISSING VALUE
+##Countries: Benin, brazil, South_Africa, Zambia, 
+################################################################
+xm1=data[21:30,];     xm1.1=data[21:30,10:13]   #benin
+xm2=data[31:57,];     xm2.1=data[31:57,10:13]   #brazil
+xm3=data[94:123,];   xm3.1=data[94:123,10:13]   #South_Africa
+xm4=data[139:154,]; xm4.1=data[139:154,10:13]   #Zambia
+
+##3.01 Plot Patterns-Missing
+p.missing1=zPatterns(xm1.1,label=NA,cell.labels=c("Missing (Benin)","Non-missing"),bar.labels=TRUE,show.means=TRUE)  #Missing
+p.missing2=zPatterns(xm2.1,label=NA,cell.labels=c("Missing (Brazil)","Non-missing"),bar.labels=TRUE,show.means=TRUE)  #Missing
+p.missing3=zPatterns(xm3.1,label=NA,cell.labels=c("Missing (South_Africa)","Non-missing"),bar.labels=TRUE,show.means=TRUE)  #Missing
+p.missing4=zPatterns(xm4.1,label=NA,cell.labels=c("Missing (Zambia)","Non-missing"),bar.labels=TRUE,show.means=TRUE)  #Missing
+
+
+##3.02 Missing value (Three alternatives)
+###3.02.1 Benin
+xm=xm1.1
+
+###Alternativa 1 "impCoda"(robCompositions)
+mi1=impCoda(xm, eps = 0.0001, method = "ltsReg",
+        closed = FALSE, init = "KNN", k = 2, dl = NULL,
+        noise = 0.1, bruteforce = FALSE)$xImp
+
+mi2=impCoda(xm, eps = 0.0001, method = "lm",
+            closed = FALSE, init = "KNN", k = 2, dl = NULL,
+            noise = 0.1, bruteforce = FALSE)$xImp
+
+mi3=lrEM(xm, label = NA, dl = NULL, rob = TRUE,
+     ini.cov = c("complete.obs"), delta = 0.65,
+     tolerance = 0.0001, max.iter = 50, rlm.maxit = 150,
+     imp.missing = TRUE, suppress.print = FALSE, closure = NULL)
+mi3t=mi3[,1]+mi3[,2]+mi3[,3]+mi3[,4]
+      #Haciendo el cierre
+mi3c=data.frame(mi3[,1]/mi3t, mi3[,2]/mi3t, mi3[,3]/mi3t, mi3[,4]/mi3t)
+
+###Ambas alternativas procesados
+xf=data.frame(mi1, mi2, mi3c)*100
+xmis1=cbind(xm1,xf=xf)
+
+###3.02.2 Brazil
+xm=xm2.1
+
+###Alternativa 1 "impCoda"(robCompositions)
+bmi1=impCoda(xm, eps = 0.0001, method = "ltsReg",
+            closed = FALSE, init = "KNN", k = 1, dl = NULL,
+            noise = 0.1, bruteforce = FALSE)$xImp
+bmi2=impCoda(xm, eps = 0.0001, method = "lm",
+            closed = FALSE, init = "KNN", k = 1, dl = NULL,
+            noise = 0.1, bruteforce = FALSE)$xImp
+bmi3=lrEM(xm, label = NA, dl = NULL, rob = TRUE,
+         ini.cov = c("multRepl"), delta = 0.65,
+         tolerance = 0.0001, max.iter = 50, rlm.maxit = 150,
+         imp.missing = TRUE, suppress.print = FALSE, closure = NULL)
+bmi3t=bmi3[,1]+bmi3[,2]+bmi3[,3]+bmi3[,4]
+#Haciendo el cierre
+bmi3c=data.frame(bmi3[,1]/bmi3t, bmi3[,2]/bmi3t, bmi3[,3]/bmi3t, bmi3[,4]/mi3t)
+
+###Ambas alternativas procesados
+bxf=data.frame(bmi1, bmi2, bmi3c)*100
+bxmis1=cbind(xm2,bxf=bxf)
+
+
+###3.02.3 South_Africa
+xm=xm3.1
+###Alternativa 1 "impCoda"(robCompositions)
+smi1=impCoda(xm, eps = 0.0001, method = "ltsReg",
+             closed = FALSE, init = "KNN", k = 2, dl = NULL,
+             noise = 0.1, bruteforce = FALSE)$xImp
+smi2=impCoda(xm, eps = 0.0001, method = "lm",
+             closed = FALSE, init = "KNN", k = 2, dl = NULL,
+             noise = 0.1, bruteforce = FALSE)$xImp
+smi3=lrEM(xm, label = NA, dl = NULL, rob = TRUE,
+          ini.cov = c("complete.obs"), delta = 0.65,
+          tolerance = 0.0001, max.iter = 50, rlm.maxit = 150,
+          imp.missing = TRUE, suppress.print = FALSE, closure = NULL)
+smi3t=smi3[,1]+smi3[,2]+smi3[,3]+smi3[,4]
+#Haciendo el cierre
+smi3c=data.frame(smi3[,1]/smi3t, smi3[,2]/smi3t, smi3[,3]/smi3t, smi3[,4]/smi3t)
+
+###Ambas alternativas procesados
+sxf=data.frame(smi1, smi2, smi3c)*100
+sxmis1=cbind(xm3,sxf=sxf)
+
+###3.02.4 Zambia
+xm=xm4.1
+###Alternativa 1 "impCoda"(robCompositions)
+zmi1=impCoda(xm, eps = 0.0001, method = "ltsReg",
+             closed = FALSE, init = "KNN", k = 2, dl = NULL,
+             noise = 0.1, bruteforce = FALSE)$xImp
+zmi2=impCoda(xm, eps = 0.0001, method = "lm",
+             closed = FALSE, init = "KNN", k = 2, dl = NULL,
+             noise = 0.1, bruteforce = FALSE)$xImp
+zmi3=lrEM(xm, label = NA, dl = NULL, rob = TRUE,
+          ini.cov = c("complete.obs"), delta = 0.65,
+          tolerance = 0.0001, max.iter = 50, rlm.maxit = 150,
+          imp.missing = TRUE, suppress.print = FALSE, closure = NULL)
+zmi3t=zmi3[,1]+zmi3[,2]+zmi3[,3]+zmi3[,4]
+#Haciendo el cierre
+zmi3c=data.frame(zmi3[,1]/zmi3t, zmi3[,2]/zmi3t, zmi3[,3]/zmi3t, zmi3[,4]/zmi3t)
+
+###Ambas alternativas procesados
+zxf=data.frame(zmi1, zmi2, zmi3c)*100
+zxmis1=cbind(xm4,zxf=zxf)
+
+#data.frame(xmis1,xmis1,xmis1,xmis1)
+#bxmis1=rbind(xmis1,bxmis1=bxmis1)
+#sxmis1=rbind(bxmis1,sxmis1=sxmis1)
+#zxmis1=rbind(sxmis1,zxmis1=zxmis1)
+#levels(zxmis1$country)
+#write.csv(dat4,file="C:/Users/Alejandro/Desktop/rf/b2019_r0_missing.csv",sep=",",dec = ".")
+
+
+################################################################
+#4.0 MISSING VALUE AND ZEROS SIMULTANEOUSLY (lrEMplus)
+################################################################
+xmz1=data[1:20,];       xmz1.1=data[1:20,10:13]   #Bangladesh
+xmz2=data[58:72,];     xmz2.1=data[58:72,10:13]   #Egypt
+xmz3=data[124:138,]; xmz3.1=data[124:138,10:13]   #Uruguay
+
+###4.01 Bangladesh
+xm=xmz1.1
+xm0=xmz1.1
+xm0[12,1]=NA
+xm0
+###Alternativa 1 impCoda(ltsReg)/robCompositions
+f1mz=impCoda(xm0, eps = 0.0001, method = "ltsReg",
+            closed = FALSE, init = "KNN", k = 4, dl = NULL,
+            noise = 0.1, bruteforce = FALSE)$xImp
+#f1mz[,1]+f1mz[,2]+f1mz[,3]+f1mz[,4]
+###Alternativa 2 (lrEMplus)/ZCompositions
+f2mz=lrEMplus(xm, dl=rep(0.01, ncol(xm)), rob=TRUE,
+             ini.cov = c("complete.obs"), delta = 0.65,
+             tolerance = 0.0001, max.iter=2, rlm.maxit = 150,
+             suppress.print = FALSE, closure = NULL)
+f2mzt=f2mz[,1]+f2mz[,2]+f2mz[,3]+f2mz[,4]
+#f2mzt
+#Haciendo el cierre
+f2mzc=data.frame(f2mz[,1]/f2mzt,f2mz[,2]/f2mzt,f2mz[,3]/f2mzt,f2mz[,4]/f2mzt)
+tot1=data.frame(xmz1,f1mz*100,f2mzc*100)
+tot1
+
+###4.02 Egypt
+xm=xmz2.1
+xm0=xmz2.1
+xm0
+xm0[2,3]=NA;xm0[3,3]=NA;xm0[5,3]=NA;xm0[7,3]=NA;xm0[10,3]=NA;xm0[3,4]=NA;
+xm0
+###Alternativa 1 impCoda(ltsReg)/robCompositions
+g1mz=impCoda(xm0, eps = 0.0001, method = "ltsReg",
+             closed = FALSE, init = "KNN", k = 2, dl = NULL,
+             noise = 0.1, bruteforce = FALSE)$xImp
+#g1mz[,1]+g1mz[,2]+g1mz[,3]+g1mz[,4]
+###Alternativa 2 (lrEMplus)/ZCompositions
+g2mz=lrEMplus(xm, dl=rep(0.01, ncol(xm)), rob=TRUE,
+              ini.cov = c("multRepl"), delta = 0.65,
+              tolerance = 0.0001, max.iter=2, rlm.maxit = 150,
+              suppress.print = FALSE, closure = NULL)
+g2mzt=g2mz[,1]+g2mz[,2]+g2mz[,3]+g2mz[,4]
+#Haciendo el cierre
+g2mzc=data.frame(g2mz[,1]/g2mzt,g2mz[,2]/g2mzt,g2mz[,3]/g2mzt,g2mz[,4]/g2mzt)
+tot2=data.frame(xmz2,g1mz*100,g2mzc*100)
+tot2
+
+###4.03 Uruguay
+xm=xmz3.1
+xm0=xmz3.1
+xm0
+xm0[12,2]=NA;xm0[13,2]=NA;xm0[1,3]=NA;xm0[9,3]=NA;xm0[12,3]=NA;xm0[13,3]=NA;
+xm0[14,3]=NA;xm0[15,3]=NA;xm0[12,4]=NA;
+
+###Alternativa 1 impCoda(ltsReg)/robCompositions
+h1mz=impCoda(xm0, eps = 0.0001, method = "ltsReg",
+             closed = FALSE, init = "KNN", k = 3, dl = NULL,
+             noise = 0.1, bruteforce = FALSE)$xImp
+#h1mz[,1]+h1mz[,2]+h1mz[,3]+h1mz[,4]
+
+###Alternativa 2 (lrEMplus)/ZCompositions
+h2mz=lrEMplus(xm, dl=rep(0.01, ncol(xm)), rob=TRUE,
+              ini.cov = c("multRepl"), delta = 0.65,
+              tolerance = 0.0001, max.iter=50, rlm.maxit = 150,
+              suppress.print = FALSE, closure = NULL)
+h2mzt=h2mz[,1]+h2mz[,2]+h2mz[,3]+h2mz[,4]
+  ###Haciendo el cierre
+h2mzc=data.frame(h2mz[,1]/h2mzt,h2mz[,2]/h2mzt,h2mz[,3]/h2mzt,h2mz[,4]/h2mzt)
+
+###Alternativa 3 impCoda(ltsReg)/robCompositions
+#1.0) Valor "NA" se reemplaza con el valor calculado por lrEMplus en ítem anterior.
+xm02=xmz3.1
+xm02
+###Uruguay_vector_con_valor_NA=(99.55543,0.204217428,0.008336002,0.232012786)
+xm02[5,1]=99.55543
+xm02[5,2]=0.204217428
+xm02[5,3]=0.008336002
+xm02[5,4]=0.232012786
+xm02
+urui1=lrEM(xm02, label=0, dl=rep(0.01, ncol(xm02)), rob=TRUE,
+         ini.cov = c("complete.obs"), delta = 0.65,
+         tolerance = 0.0001, max.iter = 50, rlm.maxit = 150,
+         imp.missing = FALSE, suppress.print = FALSE, closure = NULL)
+
+###Alternativa 3 (impRZilr)/robCompositions
+urui2=impRZilr(xm02, eps = 0.001, method = "MM", dl = rep(0.01, ncol(xm02)), 
+             variation = FALSE, nComp = "boot", bruteforce = FALSE,
+             noisemethod = "residuals", noise = FALSE, R = 10,
+             correction = "normal", verbose = FALSE)$x
+urui2t=urui2[,1]+urui2[,2]+urui2[,3]+urui2[,4]
+urut=data.frame(urui2[,1]/urui2t,urui2[,2]/urui2t,urui2[,3]/urui2t,urui2[,4]/urui2t)
+#urut[,1]+urut[,2]+urut[,3]+urut[,4]
+
+####Total para missing and zero
+tot3=data.frame(xmz3,h1mz*100,h2mzc*100,urui1,urut*100)
+tot3
+
+
