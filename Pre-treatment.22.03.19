@@ -4,7 +4,7 @@ setwd("E:/00 Tésis Doctoral/0.03 Artículos/00 Artículo_Missing.value_outlier_
 filename<-"basev0.csv";
 data<-read.csv(file=filename, header=TRUE, sep = ";", dec = ".");#d.r<-read.csv(file=filename2, header=TRUE, sep = ";", dec = ".");
 xx=data
-#levels(data$country)
+levels(data$country)
 #data0=data
 
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -25,11 +25,11 @@ ll1
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #2.0 Zero, Missing, and Zero and Missing Simultaneously (B)----
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-###Country
-iipais<-1; #(Select an integer value, according to the order of the country you want to analyze)
-pais<-levels(ll1$country)[iipais]; 
-ll2<-ll1[ll1$country==pais,]; 
-ll2
+#Selection Country----
+iipais<-9; #(Select an integer value, according to the order of the country you want to analyze)
+pais<-levels(ll1$country)[iipais];ll2<-ll1[ll1$country==pais,]; 
+ll3=ll2[,7:10]
+ll3
 
 #####(B)
 miz.coda=function(df) {
@@ -53,13 +53,13 @@ miz.coda=function(df) {
                  noisemethod = "residuals", noise = FALSE, R = 10,
                  correction = "normal", verbose = FALSE)$x
     dz3=(dz2/rowSums(dz2))*100  
-    return(data.frame(ll1,dz1,dz3))
+    return(data.frame(ll2,dz1,dz3))
     
   } else if (f2>0 & f3==0){
     #df<-print("only missing")
     ###Alternative 1 (impCoda)/robCompositions
     bmi1=impCoda(df, eps = 0.0001, method = "ltsReg",
-                 closed = FALSE, init = "KNN", k = 1, dl = NULL,
+                 closed = FALSE, init = "KNN", k = 2, dl = NULL,
                  noise = 0.1, bruteforce = FALSE)$xImp
     bmi1=bmi1*100
     ###Alternative 2 (lrEM)/ZCompositions-Brazil change "complete.obs" for "multRepl"
@@ -68,31 +68,31 @@ miz.coda=function(df) {
               tolerance = 0.0001, max.iter = 50, rlm.maxit = 150,
               imp.missing = TRUE, suppress.print = FALSE, closure = NULL)
     bmi3=(bmi2/rowSums(bmi2))*100  
-    return(data.frame(ll1,bmi1,bmi3))
+    return(data.frame(ll2,bmi1,bmi3))
     
   }else if (f2>0 & f3>0){
     #"missing and zero simultaneously"
-    ###Alternative 1 (lrEMplus)/ZCompositions
+    ###Alternative 1 (lrEMplus)/ZCompositions-Egypt change "complete.obs" for "multRepl"
     mz1=lrEMplus(df, dl=rep(0.01, ncol(df)), rob=TRUE,
-                 ini.cov = c("complete.obs"), delta = 0.65,
+                 ini.cov = c("multRepl"), delta = 0.65,
                  tolerance = 0.0001, max.iter=50, rlm.maxit = 150,
                  suppress.print = FALSE, closure = NULL)
     mz1=(mz1/rowSums(mz1))*100 
     
-    ###Alternative 2 impCoda(ltsReg)/robCompositions
+    ###Alternative 2 impCoda(ltsReg)/robCompositions-Egypt change "KNN=2" 
     df[df == "0"] = NA
     mz2=impCoda(df, eps = 0.0001, method = "ltsReg",
-                closed = FALSE, init = "KNN", k = 1, dl = NULL,
+                closed = FALSE, init = "KNN", k =3, dl = NULL,
                 noise = 0.1, bruteforce = FALSE)$xImp
     mz2=mz2*100      
-    return(data.frame(ll1,mz2,mz1))
+    return(data.frame(ll2,mz2,mz1))#First impCoda then lrEmplus (The same in journal)
   }
 }
 
-xx2=miz.coda(ll2) 
-### Quality Metric (RMSE)
+xx2=miz.coda(ll3) 
 #xx2
 
+#Quality Metric (RMSE)----
 rmse.coda=function(df) {
   f0=cbind(c(df$x1,df$x2,df$x3,df$x4))
   f02=na.omit(f0)##omit missing "NA"
@@ -122,15 +122,29 @@ rmse.coda=function(df) {
 t=rmse.coda(xx2)
 t
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
+#Selection of the imputation method----
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 data.coda=function(df) {
   if (t[,1] <= t[,2]){
     r2=df[,11:14]
-    df<-return(data.frame(ll1,r2))
+    df<-return(data.frame(ll2,r2))
   } else { 
     r3=df[,15:18]
-    return(data.frame(ll1,r3))
+    return(data.frame(ll2,r3))
   }
 }
 bas0=data.coda(xx2)
+
+#Export the result of the preprocessing----
+write.table(bas0,file="Uruguay.csv",sep=";",row.names = FALSE)
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#3.0 Outliers (C)----
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+bas1=bas0[,11:14]
+m1=outCoDa(bas1, quantile = 0.975, method = "robust");
+m1;
+m1$limit;
+m1$mahalDist;
+m1$outlierIndex
+plot(m1)# plots robust Mahalanobis distance
