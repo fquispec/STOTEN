@@ -1,6 +1,7 @@
 rm(list = ls())
 library(mgcv);library(robCompositions); library(zCompositions);library(hydroGOF)
-setwd("C:/Users/Alejandro/Desktop/rfati");filename<-"JMPdata2019.csv";
+setwd("E:/00 Tésis Doctoral/0.03 Artículos/00 Artículo_Missing.value_outlier_ceros/1.0 Pre-processing data 22.03.20");
+filename<-"basev0.csv";
 data<-read.csv(file=filename, header=TRUE, sep = ";", dec = ".");#d.r<-read.csv(file=filename2, header=TRUE, sep = ";", dec = ".");
 xx=data
 #levels(data$country)
@@ -15,7 +16,7 @@ calculate.compositions <- function(df){
   x1 <- df$x1
   x2 <- df$imp-df$x1
   x3 <- df$x3
-  x4 <- 100-df$imp-df$x3
+  x4 <- 100-(df$imp+df$x3)
   return(data.frame("country"=df$country,"service"=df$service,"sector"=df$sector,"source"=df$source,"type"=df$type,"year"=df$year,
                     "x1"=x1,"x2"=x2,"x3"=x3,"x4"=x4))}
 ll1<-calculate.compositions(xx)
@@ -27,8 +28,8 @@ ll1
 ###Country
 iipais<-1; #(Select an integer value, according to the order of the country you want to analyze)
 pais<-levels(ll1$country)[iipais]; 
-ll<-ll1[ll1$country==pais,]; 
-ll
+ll2<-ll1[ll1$country==pais,]; 
+ll2
 
 #####(B)
 miz.coda=function(df) {
